@@ -1,0 +1,2 @@
+# Каталог для JSON-хранилищ.
+# Файлы users.json, services.json и orders.json создаются модулями при первом запуске.

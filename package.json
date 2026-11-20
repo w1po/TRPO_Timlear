@@ -1,0 +1,21 @@
+{
+  "name": "timlear",
+  "version": "1.0.0",
+  "description": "Timlear — веб-приложение для заказа клининговых услуг (лабораторная работа №24)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "express",
+    "cleaning",
+    "lab24",
+    "modular-programming"
+  ],
+  "author": "Artem",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

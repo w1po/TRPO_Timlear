@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Мойдодыр — клининг-сервис Timlear. Расчёт стоимости, онлайн-оплата и виртуальная квитанция.">
+  <title>Мойдодыр — клининг Timlear</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="page-glow page-glow-left" aria-hidden="true"></div>
+  <div class="page-glow page-glow-right" aria-hidden="true"></div>
+
+  <!-- ===================== ШАПКА ===================== -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#" data-view="home" aria-label="На главную">
+        <span class="brand-mark"><i data-lucide="shield-check"></i></span>
+        <span class="brand-text">
+          <strong>Мойдодыр</strong>
+          <small>Timlear cleaning</small>
+        </span>
+      </a>
+
+      <nav class="main-nav" aria-label="Основная навигация">
+        <button class="nav-link active" data-view="home">
+          <i data-lucide="calculator"></i><span>Главная</span>
+        </button>
+        <button class="nav-link" data-view="account">
+          <i data-lucide="user-round"></i><span>Личный кабинет</span>
+        </button>
+        <button class="nav-link admin-only hidden" data-view="admin">
+          <i data-lucide="shield"></i><span>Панель администратора</span>
+        </button>
+      </nav>
+
+      <div class="header-actions">
+        <div class="user-chip hidden" id="user-chip" title="Открыть личный кабинет">
+          <span class="user-avatar" id="user-avatar">A</span>
+          <span class="user-meta">
+            <strong id="user-name">Пользователь</strong>
+            <small id="user-role">Клиент</small>
+          </span>
+        </div>
+        <button class="btn btn-ghost" id="login-btn">
+          <i data-lucide="log-in"></i><span>Войти / Регистрация</span>
+        </button>
+        <button class="btn btn-ghost hidden" id="logout-btn">
+          <i data-lucide="log-out"></i><span>Выход</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <!-- ===================== ГЛАВНАЯ / КАЛЬКУЛЯТОР ===================== -->
+    <section class="view" id="view-home">
+      <section class="hero">
+        <div class="hero-content">
+          <span class="hero-eyebrow">
+            <i data-lucide="sparkles"></i>
+            Клининг-сервис Timlear
+          </span>
+          <h1>Чистота, достойная <span>Повелителя Бури</span></h1>
+          <p class="hero-lead">
+            Соберите уборку под знаменем чистоты: выберите тип помещения,
+            площадь и пакет — калькулятор мгновенно посчитает стоимость,
+            а виртуальная квитанция появится сразу после оплаты.
+          </p>
+          <div class="hero-points">
+            <span><i data-lucide="badge-check"></i> Прозрачный расчёт</span>
+            <span><i data-lucide="receipt-text"></i> Квитанция онлайн</span>
+            <span><i data-lucide="shield-check"></i> Демо-оплата</span>
+          </div>
+        </div>
+        <div class="hero-emblem" aria-hidden="true">
+          <div class="emblem-orbit orbit-one"></div>
+          <div class="emblem-orbit orbit-two"></div>
+          <div class="emblem-core">
+            <i data-lucide="shield-check"></i>
+            <strong>TIMLEAR</strong>
+            <span>clean with honour</span>
+          </div>
+          <span class="emblem-caption">TEMPEST CLEANING</span>
+        </div>
+      </section>
+
+      <!-- Пошаговый степпер -->
+      <div class="stepper" id="stepper" aria-label="Этапы оформления заказа">
+        <button class="step active" type="button" data-step-target="1">
+          <span class="step-num">1</span>
+          <span class="step-copy"><small>Шаг 1</small><strong>Помещение</strong></span>
+        </button>
+        <span class="step-line"></span>
+        <button class="step" type="button" data-step-target="2">
+          <span class="step-num">2</span>
+          <span class="step-copy"><small>Шаг 2</small><strong>Пакет и время</strong></span>
+        </button>
+        <span class="step-line"></span>
+        <button class="step" type="button" data-step-target="3">
+          <span class="step-num">3</span>
+          <span class="step-copy"><small>Шаг 3</small><strong>Оплата и квитанция</strong></span>
+        </button>
+      </div>
+
+      <div class="booking-layout">
+        <div class="booking-card card">
+          <!-- Шаг 1 -->
+          <div class="step-panel" data-step-panel="1">
+            <div class="panel-head">
+              <span class="panel-kicker">Шаг 1 из 3</span>
+              <h2>Параметры помещения</h2>
+              <p>От типа объекта и площади зависит коэффициент и итоговая цена.</p>
+            </div>
+
+            <div class="field-label">Тип помещения</div>
+            <div class="property-grid" id="property-options"></div>
+
+            <div class="form-grid">
+              <div class="field">
+                <label for="area">Площадь, м²</label>
+                <div class="input-wrap">
+                  <i data-lucide="ruler"></i>
+                  <input id="area" type="number" min="10" max="1000" step="1" value="45" inputmode="numeric">
+                  <span class="input-suffix">м²</span>
+                </div>
+                <small class="field-hint">Уборка рассчитывается от 10 до 1000 м².</small>
+              </div>
+              <div class="field">
+                <label for="address">Адрес уборки</label>
+                <div class="input-wrap">
+                  <i data-lucide="map-pin"></i>
+                  <input id="address" type="text" maxlength="250" placeholder="Москва, ул. Тверская, 12, кв. 45" autocomplete="street-address">
+                </div>
+                <small class="field-hint">Курьер-клинер приедет по этому адресу.</small>
+              </div>
+            </div>
+
+            <div class="panel-actions">
+              <span class="panel-step-note"><i data-lucide="clock-3"></i> Займёт меньше минуты</span>
+              <button class="btn btn-primary" type="button" id="next-1">
+                Выбрать пакет <i data-lucide="arrow-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Шаг 2 -->
+          <div class="step-panel hidden" data-step-panel="2">
+            <div class="panel-head">
+              <span class="panel-kicker">Шаг 2 из 3</span>
+              <h2>Пакет и время</h2>
+              <p>Подберите глубину уборки и удобный слот — мы приедем точно по времени.</p>
+            </div>
+
+            <div class="form-grid time-grid">
+              <div class="field">
+                <label for="cleaning-date">Дата уборки</label>
+                <div class="input-wrap">
+                  <i data-lucide="calendar-days"></i>
+                  <input id="cleaning-date" type="date">
+                </div>
+              </div>
+              <div class="field">
+                <label for="cleaning-time">Время</label>
+                <div class="input-wrap">
+                  <i data-lucide="clock-3"></i>
+                  <input id="cleaning-time" type="time" value="10:00" step="1800">
+                </div>
+              </div>
+            </div>
+
+            <div class="field-label">Пакет услуг</div>
+            <div class="package-grid" id="package-options"></div>
+
+            <div class="panel-actions">
+              <button class="btn btn-ghost" type="button" id="back-2">
+                <i data-lucide="arrow-left"></i> Назад
+              </button>
+              <button class="btn btn-primary" type="button" id="next-2">
+                Перейти к оплате <i data-lucide="arrow-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Шаг 3 -->
+          <div class="step-panel hidden" data-step-panel="3">
+            <div id="payment-block">
+              <div class="panel-head">
+                <span class="panel-kicker">Шаг 3 из 3</span>
+                <h2>Оплата заказа</h2>
+                <p>Демонстрационная форма. Данные карты никуда не отправляются и не сохраняются.</p>
+              </div>
+
+              <div class="payment-grid">
+                <div class="bank-card" aria-hidden="true">
+                  <div class="bank-card-top">
+                    <span>Мойдодыр <b>PAY</b></span>
+                    <i data-lucide="wifi"></i>
+                  </div>
+                  <span class="bank-chip"></span>
+                  <div class="bank-number" id="card-preview-number">•••• •••• •••• ••••</div>
+                  <div class="bank-bottom">
+                    <span><small>Держатель</small><strong id="card-preview-holder">ИМЯ ФАМИЛИЯ</strong></span>
+                    <span><small>Срок</small><strong id="card-preview-expiry">MM/YY</strong></span>
+                  </div>
+                  <div class="bank-shine"></div>
+                </div>
+
+                <form class="payment-form" id="payment-form" autocomplete="off" novalidate>
+                  <div class="field">
+                    <label for="card-number">Номер карты</label>
+                    <div class="input-wrap">
+                      <i data-lucide="credit-card"></i>
+                      <input id="card-number" type="text" inputmode="numeric" maxlength="19" placeholder="0000 0000 0000 0000" required>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label for="card-holder">Держатель карты</label>
+                    <div class="input-wrap">
+                      <i data-lucide="user-round"></i>
+                      <input id="card-holder" type="text" maxlength="40" placeholder="IVAN IVANOV" required>
+                    </div>
+                  </div>
+                  <div class="form-grid compact-grid">
+                    <div class="field">
+                      <label for="card-expiry">Срок действия</label>
+                      <div class="input-wrap">
+                        <i data-lucide="calendar"></i>
+                        <input id="card-expiry" type="text" inputmode="numeric" maxlength="5" placeholder="MM/YY" required>
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label for="card-cvc">CVC</label>
+                      <div class="input-wrap">
+                        <i data-lucide="lock"></i>
+                        <input id="card-cvc" type="password" inputmode="numeric" maxlength="3" placeholder="•••" required>
+                      </div>
+                    </div>
+                  </div>
+                  <button class="btn btn-primary btn-lg btn-block" type="submit" id="pay-button">
+                    <i data-lucide="lock"></i><span id="pay-button-label">Оплатить</span>
+                  </button>
+                  <p class="payment-note">
+                    <i data-lucide="shield-check"></i>
+                    Это заглушка оплаты для лабораторной работы. Реальное списание не происходит.
+                  </p>
+                </form>
+              </div>
+
+              <div class="panel-actions">
+                <button class="btn btn-ghost" type="button" id="back-3">
+                  <i data-lucide="arrow-left"></i> Назад к пакету
+                </button>
+              </div>
+            </div>
+
+            <div class="payment-result hidden" id="payment-result">
+              <div class="success-banner">
+                <span class="success-icon"><i data-lucide="check"></i></span>
+                <div>
+                  <strong>Оплата прошла успешно!</strong>
+                  <p>Заказ оплачен, квитанция сформирована и сохранена в личном кабинете.</p>
+                </div>
+              </div>
+              <div id="receipt-preview"></div>
+              <div class="result-actions">
+                <button class="btn btn-primary" type="button" id="go-account-btn">
+                  <i data-lucide="user-round"></i> В личный кабинет
+                </button>
+                <button class="btn btn-ghost" type="button" id="new-order-btn">
+                  <i data-lucide="rotate-ccw"></i> Новый заказ
+                </button>
+                <button class="btn btn-ghost" type="button" id="print-last-receipt">
+                  <i data-lucide="printer"></i> Печать квитанции
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Блок «Итого» -->
+        <aside class="summary" id="summary">
+          <div class="summary-head">
+            <div>
+              <span class="summary-kicker">Предварительный расчёт</span>
+              <h2>Итого</h2>
+            </div>
+            <span class="summary-icon"><i data-lucide="receipt-text"></i></span>
+          </div>
+
+          <div class="summary-empty" id="summary-empty">
+            <i data-lucide="sparkles"></i>
+            <p>Заполните параметры помещения и выберите пакет — стоимость появится здесь.</p>
+          </div>
+
+          <div class="summary-details hidden" id="summary-details"></div>
+
+          <button class="btn btn-primary btn-lg btn-block hidden" type="button" id="summary-pay">
+            <i data-lucide="credit-card"></i><span>Оплатить</span>
+          </button>
+
+          <div class="summary-note">
+            <i data-lucide="shield-check"></i>
+            <span>Итоговая сумма повторно проверяется на сервере перед оплатой.</span>
+          </div>
+
+          <ul class="summary-perks">
+            <li><i data-lucide="badge-check"></i> Проверенные клинеры</li>
+            <li><i data-lucide="receipt-text"></i> Виртуальная квитанция</li>
+            <li><i data-lucide="headset"></i> Поддержка 7 дней в неделю</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ===================== ЛИЧНЫЙ КАБИНЕТ ===================== -->
+    <section class="view hidden" id="view-account">
+      <div class="section-head">
+        <div>
+          <span class="section-eyebrow"><i data-lucide="user-round"></i> Личный кабинет</span>
+          <h1>Мои заказы</h1>
+          <p>Здесь хранятся все заявки, квитанции и текущие статусы уборки.</p>
+        </div>
+        <button class="btn btn-primary" type="button" data-view="home">
+          <i data-lucide="plus"></i> Новый заказ
+        </button>
+      </div>
+
+      <div class="empty-state card hidden" id="account-guest">
+        <span class="empty-icon"><i data-lucide="lock-keyhole"></i></span>
+        <h2>Войдите в личный кабинет</h2>
+        <p>Чтобы увидеть историю заказов и квитанции, авторизуйтесь или создайте аккаунт.</p>
+        <button class="btn btn-primary" type="button" id="account-login-btn">
+          <i data-lucide="log-in"></i> Войти / Регистрация
+        </button>
+      </div>
+
+      <div id="account-content" class="hidden">
+        <div class="profile-card" id="profile-card"></div>
+        <div class="card table-card">
+          <div class="card-head">
+            <div>
+              <h2>История заказов</h2>
+              <p>Квитанции и управление услугами</p>
+            </div>
+            <span class="count-badge" id="my-orders-count">0 заказов</span>
+          </div>
+          <div id="my-orders"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ПАНЕЛЬ АДМИНИСТРАТОРА ===================== -->
+    <section class="view hidden" id="view-admin">
+      <div class="section-head">
+        <div>
+          <span class="section-eyebrow"><i data-lucide="shield"></i> Панель администратора</span>
+          <h1>Управление Timlear</h1>
+          <p>Все заказы, статусы и тарифы клинингового сервиса в одном месте.</p>
+        </div>
+        <button class="btn btn-ghost" type="button" id="refresh-admin">
+          <i data-lucide="refresh-cw"></i> Обновить
+        </button>
+      </div>
+
+      <div class="stats-grid" id="admin-stats"></div>
+
+      <div class="admin-grid">
+        <div class="card table-card admin-orders-card">
+          <div class="card-head">
+            <div>
+              <h2>Все заказы</h2>
+              <p>Смена статуса применяется сразу</p>
+            </div>
+            <span class="count-badge" id="admin-orders-count">0</span>
+          </div>
+          <div id="admin-orders"></div>
+        </div>
+
+        <aside class="card tariffs-card">
+          <div class="card-head">
+            <div>
+              <h2>Тарифы</h2>
+              <p>Цена за 1 м² для каждого пакета</p>
+            </div>
+            <span class="gold-badge"><i data-lucide="gem"></i> Цены</span>
+          </div>
+          <div id="tariff-editor"></div>
+          <p class="tariff-note">
+            <i data-lucide="info"></i>
+            После сохранения новые цены сразу применяются в калькуляторе.
+          </p>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <span class="footer-brand"><i data-lucide="shield-check"></i> Мойдодыр · Timlear</span>
+      <span>Лабораторная работа №24 · Node.js + Express · модульная архитектура</span>
+      <span>© <span id="footer-year"></span> Artem</span>
+    </div>
+  </footer>
+
+  <!-- ===================== МОДАЛЬНОЕ ОКНО ВХОДА ===================== -->
+  <div class="modal" id="auth-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="auth-modal"></div>
+    <div class="modal-dialog auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <button class="modal-close" type="button" data-close-modal="auth-modal" aria-label="Закрыть">
+        <i data-lucide="x"></i>
+      </button>
+
+      <div class="auth-brand">
+        <span class="brand-mark"><i data-lucide="shield-check"></i></span>
+        <div>
+          <strong id="auth-title">Мойдодыр</strong>
+          <small>Вход в Timlear</small>
+        </div>
+      </div>
+
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab active" type="button" data-auth-tab="login">Вход</button>
+        <button class="auth-tab" type="button" data-auth-tab="register">Регистрация</button>
+      </div>
+
+      <form class="auth-form" id="login-form" novalidate>
+        <div class="field">
+          <label for="login-login">E-mail или логин</label>
+          <div class="input-wrap">
+            <i data-lucide="at-sign"></i>
+            <input id="login-login" type="text" autocomplete="username" placeholder="user@mail.ru" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="login-password">Пароль</label>
+          <div class="input-wrap">
+            <i data-lucide="lock"></i>
+            <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••" required>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">
+          <i data-lucide="log-in"></i> Войти
+        </button>
+        <div class="demo-hint">
+          <span>Демо-доступы:</span>
+          <button class="demo-chip" type="button" data-demo="admin">admin / admin123</button>
+          <button class="demo-chip" type="button" data-demo="client">user@mail.ru / 123456</button>
+        </div>
+      </form>
+
+      <form class="auth-form hidden" id="register-form" novalidate>
+        <div class="field">
+          <label for="register-name">Имя</label>
+          <div class="input-wrap">
+            <i data-lucide="user-round"></i>
+            <input id="register-name" type="text" maxlength="60" autocomplete="name" placeholder="Артём" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="register-email">E-mail</label>
+          <div class="input-wrap">
+            <i data-lucide="at-sign"></i>
+            <input id="register-email" type="email" maxlength="120" autocomplete="email" placeholder="you@mail.ru" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="register-phone">Телефон <span class="optional">необязательно</span></label>
+          <div class="input-wrap">
+            <i data-lucide="phone"></i>
+            <input id="register-phone" type="tel" maxlength="30" autocomplete="tel" placeholder="+7 (900) 000-00-00">
+          </div>
+        </div>
+        <div class="field">
+          <label for="register-password">Пароль</label>
+          <div class="input-wrap">
+            <i data-lucide="lock"></i>
+            <input id="register-password" type="password" minlength="6" autocomplete="new-password" placeholder="Минимум 6 символов" required>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">
+          <i data-lucide="user-plus"></i> Создать аккаунт
+        </button>
+        <p class="auth-legal">Регистрируясь, вы соглашаетесь с демо-правилами сервиса Timlear.</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== МОДАЛЬНОЕ ОКНО КВИТАНЦИИ ===================== -->
+  <div class="modal" id="receipt-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="receipt-modal"></div>
+    <div class="modal-dialog receipt-dialog" role="dialog" aria-modal="true" aria-label="Виртуальная квитанция">
+      <div class="receipt-toolbar">
+        <span><i data-lucide="receipt-text"></i> Виртуальная квитанция</span>
+        <div class="receipt-toolbar-actions">
+          <button class="btn btn-ghost btn-sm" type="button" id="print-receipt-btn">
+            <i data-lucide="printer"></i> Печать
+          </button>
+          <button class="modal-close" type="button" data-close-modal="receipt-modal" aria-label="Закрыть">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+      </div>
+      <div id="receipt-modal-body"></div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
