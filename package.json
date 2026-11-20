@@ -1,7 +1,7 @@
 {
   "name": "timlear",
   "version": "1.0.0",
-  "description": "Timlear — веб-приложение для заказа клининговых услуг (лабораторная работа №24)",
+  "description": "Timlear — клининг-сервис в Беларуси: расчёт, онлайн-оплата и виртуальные квитанции",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,7 +10,7 @@
   "keywords": [
     "express",
     "cleaning",
-    "lab24",
+    "timlear",
     "modular-programming"
   ],
   "author": "Artem",

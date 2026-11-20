@@ -34,7 +34,7 @@ const SERVICES_FILE = path.join(DATA_DIR, 'services.json');
 
 /** Тарифная сетка по умолчанию. Создаётся при первом запуске приложения. */
 const DEFAULT_SERVICES = {
-  currency: 'RUB',
+  currency: 'BYN',
   propertyTypes: [
     {
       id: 'apartment',
@@ -62,7 +62,7 @@ const DEFAULT_SERVICES = {
     {
       id: 'basic',
       name: 'Базовая',
-      pricePerSqm: 120,
+      pricePerSqm: 4,
       icon: 'sparkles',
       description: 'Регулярная поддерживающая уборка для чистоты каждый день.',
       features: [
@@ -76,7 +76,7 @@ const DEFAULT_SERVICES = {
     {
       id: 'general',
       name: 'Генеральная',
-      pricePerSqm: 220,
+      pricePerSqm: 7,
       icon: 'wand-sparkles',
       description: 'Глубокая уборка всех зон, включая труднодоступные места.',
       features: [
@@ -91,7 +91,7 @@ const DEFAULT_SERVICES = {
     {
       id: 'renovation',
       name: 'После ремонта',
-      pricePerSqm: 320,
+      pricePerSqm: 11,
       icon: 'hard-hat',
       description: 'Удаление строительной пыли, следов краски и клея после работ.',
       features: [
@@ -187,7 +187,7 @@ function parseArea(area) {
 function parsePrice(newPrice) {
   const parsed = Number(newPrice);
   if (!Number.isFinite(parsed) || parsed < 1 || parsed > 100000) {
-    throw fail('Цена за м² должна быть числом от 1 до 100 000 ₽');
+    throw fail('Цена за м² должна быть числом от 1 до 100 000 Br');
   }
   return Math.round(parsed);
 }
@@ -213,7 +213,7 @@ function getServices() {
  * @param {string} propertyType — apartment | house | office
  * @param {number} area — площадь в м²
  * @param {string} packageId — basic | general | renovation
- * @returns {number} итоговая стоимость в рублях
+ * @returns {number} итоговая стоимость в белорусских рублях (BYN)
  */
 function calculateTotal(propertyType, area, packageId) {
   const services = readServices();

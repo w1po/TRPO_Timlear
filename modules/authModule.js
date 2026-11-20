@@ -118,6 +118,32 @@ function cleanText(value, maxLength = 120) {
 }
 
 /**
+ * Проверяет и приводит белорусский номер к формату +375 (XX) XXX-XX-XX.
+ * Пустое значение допустимо: телефон при регистрации не обязателен.
+ */
+function normalizeBelarusPhone(value) {
+  const raw = cleanText(value, 30);
+  if (!raw) return '';
+
+  const digits = raw.replace(/\D/g, '');
+  let local = '';
+
+  if (digits.length === 12 && digits.startsWith('375')) {
+    local = digits.slice(3);
+  } else if (digits.length === 11 && digits.startsWith('80')) {
+    local = digits.slice(2);
+  } else if (digits.length === 9) {
+    local = digits;
+  }
+
+  if (!/^\d{9}$/.test(local)) {
+    throw fail('Укажите белорусский номер в формате +375 (XX) XXX-XX-XX');
+  }
+
+  return `+375 (${local.slice(0, 2)}) ${local.slice(2, 5)}-${local.slice(5, 7)}-${local.slice(7, 9)}`;
+}
+
+/**
  * Создаёт дефолтных пользователей при запуске:
  *   • администратор  admin / admin123
  *   • клиент         user@mail.ru / 123456
@@ -135,8 +161,8 @@ function seedDefaultUsers() {
       id: 'usr_admin',
       name: 'Администратор',
       login: 'admin',
-      email: 'admin@timlear.ru',
-      phone: '+7 (900) 000-00-01',
+      email: 'admin@timlear.by',
+      phone: '+375 (29) 111-22-33',
       role: 'admin',
       ...password,
       createdAt: new Date().toISOString()
@@ -152,7 +178,7 @@ function seedDefaultUsers() {
       name: 'Артём',
       login: 'user',
       email: 'user@mail.ru',
-      phone: '+7 (900) 000-00-02',
+      phone: '+375 (29) 222-33-44',
       role: 'client',
       ...password,
       createdAt: new Date().toISOString()
@@ -180,7 +206,7 @@ seedDefaultUsers();
 function register(userData = {}) {
   const name = cleanText(userData.name, 60);
   const email = cleanText(userData.email, 120).toLowerCase();
-  const phone = cleanText(userData.phone, 30);
+  const phone = normalizeBelarusPhone(userData.phone);
   const password = String(userData.password || '');
 
   if (name.length < 2) {

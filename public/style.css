@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Мойдодыр · Timlear — стили интерфейса
+   Timlear — стили интерфейса
    Палитра: #F4F7FA / #FFFFFF / #2B62A5 / #1D4273 / #EBF3FA / #D4AF37
    ========================================================================== */
 
@@ -2768,6 +2768,17 @@ a {
   width: 14px;
   height: 14px;
   color: var(--gold);
+}
+
+.footer-contact a {
+  color: var(--primary-dark);
+  font-weight: 700;
+  transition: color 0.18s ease;
+}
+
+.footer-contact a:hover {
+  color: var(--primary);
+  text-decoration: underline;
 }
 
 /* ==========================================================================

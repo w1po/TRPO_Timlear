@@ -351,7 +351,7 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log('');
     console.log('  ╔══════════════════════════════════════════════════════╗');
-    console.log('  ║   МОЙДОДЫР · TIMLEAR CLEANING                        ║');
+    console.log('  ║   TIMLEAR · CLEANING SERVICE                         ║');
     console.log('  ╚══════════════════════════════════════════════════════╝');
     console.log(`  Сервер запущен:  http://localhost:${PORT}`);
     console.log('');

@@ -50,7 +50,7 @@ const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selec
 const moneyFormatter = new Intl.NumberFormat('ru-RU');
 
 function formatMoney(value) {
-  return `${moneyFormatter.format(Math.round(Number(value) || 0))} ₽`;
+  return `${moneyFormatter.format(Math.round(Number(value) || 0))} Br`;
 }
 
 function formatNumber(value) {
@@ -425,7 +425,7 @@ function renderPackages() {
       <p>${escapeHtml(pkg.description || '')}</p>
       <span class="package-price">
         <strong>${formatNumber(pkg.pricePerSqm)}</strong>
-        <span>₽ / м²</span>
+        <span>Br / м²</span>
       </span>
       <ul class="package-features">
         ${(pkg.features || []).map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}
@@ -678,8 +678,8 @@ function receiptHTML(order) {
         <div class="receipt-brand">
           <span class="brand-mark"><i data-lucide="shield-check"></i></span>
           <div>
-            <strong>Мойдодыр</strong>
-            <small>Timlear cleaning · виртуальная квитанция</small>
+            <strong>Timlear</strong>
+            <small>cleaning service · виртуальная квитанция</small>
           </div>
         </div>
         <div class="receipt-number-box">
@@ -735,7 +735,7 @@ function receiptHTML(order) {
         </div>
         <div class="receipt-line">
           <span>Способ оплаты</span>
-          <strong>Демо-карта Мойдодыр PAY</strong>
+          <strong>Демо-карта Timlear PAY</strong>
         </div>
       </div>
 
@@ -762,7 +762,7 @@ function receiptHTML(order) {
         <div class="barcode" aria-hidden="true"></div>
       </div>
 
-      <div class="receipt-footnote">Мойдодыр · Timlear · заказ ${escapeHtml(order.id)} · demo receipt</div>
+      <div class="receipt-footnote">Timlear · заказ ${escapeHtml(order.id)} · demo receipt</div>
     </article>
   `;
 }
@@ -1078,7 +1078,7 @@ function renderTariffs() {
         <label class="tariff-input">
           <input type="number" min="1" max="100000" step="1" value="${Number(pkg.pricePerSqm)}"
                  aria-label="Цена за м² для пакета ${escapeHtml(pkg.name)}" required>
-          <span>₽ / м²</span>
+          <span>Br / м²</span>
         </label>
         <button class="btn btn-primary btn-sm" type="submit">
           <i data-lucide="save"></i> Сохранить
