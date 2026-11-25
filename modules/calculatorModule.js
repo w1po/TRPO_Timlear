@@ -5,9 +5,11 @@
  *  modules/calculatorModule.js — МОДУЛЬ ТАРИФОВ И РАСЧЁТА СТОИМОСТИ
  * ============================================================================
  *  Назначение модуля:
- *    • хранить пакеты услуг и коэффициенты типов помещений;
+ *    • хранить пакеты услуг, дополнительные услуги и коэффициенты помещений;
  *    • рассчитывать стоимость уборки по формуле:
- *          цена за м² × площадь × коэффициент помещения;
+ *          цена за м² × площадь × коэффициент + дополнительные услуги;
+ *    • разрешать заказ без основного пакета, если выбрана хотя бы одна
+ *      дополнительная услуга;
  *    • позволять администратору обновлять тарифы.
  *
  *  Инкапсуляция:
@@ -16,9 +18,12 @@
  *    готовые объекты тарифов и итоговая сумма.
  *
  *  Публичный интерфейс (module.exports):
- *    • getServices()                              — тарифы и коэффициенты;
- *    • calculateTotal(propertyType, area, packageId) — итоговая стоимость;
- *    • updateTariff(packageId, newPrice)          — изменить цену пакета.
+ *    • getServices()                                  — тарифы и коэффициенты;
+ *    • calculateBreakdown(propertyType, area, packageId, extraServiceIds)
+ *                                                     — детализированный расчёт;
+ *    • calculateTotal(propertyType, area, packageId, extraServiceIds)
+ *                                                     — итоговая стоимость;
+ *    • updateTariff(packageId, newPrice)              — изменить цену пакета.
  * ============================================================================
  */
 
@@ -104,6 +109,36 @@ const DEFAULT_SERVICES = {
       highlight: true
     }
   ],
+  extraServices: [
+    {
+      id: 'windows',
+      name: 'Мытьё окон (стандартное окно)',
+      price: 25,
+      icon: 'app-window',
+      hint: 'Стандартное окно, обе стороны'
+    },
+    {
+      id: 'sofa',
+      name: 'Химчистка дивана',
+      price: 60,
+      icon: 'sofa',
+      hint: 'Глубокая чистка обивки'
+    },
+    {
+      id: 'balcony',
+      name: 'Уборка балкона / лоджии',
+      price: 35,
+      icon: 'door-open',
+      hint: 'Пол, ограждения и остекление'
+    },
+    {
+      id: 'appliances',
+      name: 'Мытьё холодильника и духовки внутри',
+      price: 30,
+      icon: 'refrigerator',
+      hint: 'Внутренние камеры и противень'
+    }
+  ],
   updatedAt: new Date().toISOString()
 };
 
@@ -145,6 +180,27 @@ function readServices() {
     throw fail('Некорректная структура файла тарифов', 500);
   }
 
+  // Мягкая миграция старых файлов: добавляем недостающие доп. услуги.
+  if (!Array.isArray(services.extraServices)) {
+    services.extraServices = [];
+  }
+
+  let migrated = false;
+  DEFAULT_SERVICES.extraServices.forEach((defaultExtra) => {
+    const exists = services.extraServices.some(
+      (extra) => extra && String(extra.id) === defaultExtra.id
+    );
+    if (!exists) {
+      services.extraServices.push(clone(defaultExtra));
+      migrated = true;
+    }
+  });
+
+  if (migrated) {
+    services.updatedAt = new Date().toISOString();
+    writeServices(services);
+  }
+
   return services;
 }
 
@@ -172,6 +228,39 @@ function findPackage(services, packageId) {
     throw fail('Неизвестный пакет услуг');
   }
   return pkg;
+}
+
+/** Основной пакет необязателен: пустой id означает «без пакета». */
+function findOptionalPackage(services, packageId) {
+  const id = String(packageId == null ? '' : packageId).trim();
+  if (!id || id === 'none') return null;
+  return findPackage(services, id);
+}
+
+/** Проверяет и нормализует массив идентификаторов доп. услуг. */
+function normalizeExtraIds(extraServiceIds) {
+  if (extraServiceIds == null || extraServiceIds === '') return [];
+  if (!Array.isArray(extraServiceIds)) {
+    throw fail('Некорректный список дополнительных услуг');
+  }
+
+  const ids = [];
+  extraServiceIds.forEach((value) => {
+    const id = String(value == null ? '' : value).trim();
+    if (id && !ids.includes(id)) ids.push(id);
+  });
+  return ids;
+}
+
+/** Находит выбранные дополнительные услуги по идентификаторам. */
+function findExtraServices(services, extraServiceIds) {
+  return normalizeExtraIds(extraServiceIds).map((id) => {
+    const extra = services.extraServices.find((item) => item && item.id === id);
+    if (!extra) {
+      throw fail('Неизвестная дополнительная услуга');
+    }
+    return extra;
+  });
 }
 
 /** Проверяет и нормализует площадь помещения. */
@@ -208,20 +297,68 @@ function getServices() {
 }
 
 /**
- * Считает стоимость заказа на сервере (клиентская сумма не считается доверенной).
- * Формула: цена за м² × площадь × коэффициент типа помещения.
+ * Считает заказ на сервере и возвращает полную расшифровку стоимости.
+ * Основной пакет необязателен, если выбрана хотя бы одна доп. услуга.
  * @param {string} propertyType — apartment | house | office
  * @param {number} area — площадь в м²
- * @param {string} packageId — basic | general | renovation
- * @returns {number} итоговая стоимость в белорусских рублях (BYN)
+ * @param {string|null} packageId — basic | general | renovation | null
+ * @param {string[]} extraServiceIds — идентификаторы дополнительных услуг
+ * @returns {object} пакет, доп. услуги, промежуточные суммы и итог
  */
-function calculateTotal(propertyType, area, packageId) {
+function calculateBreakdown(propertyType, area, packageId, extraServiceIds = []) {
   const services = readServices();
   const type = findPropertyType(services, propertyType);
-  const pkg = findPackage(services, packageId);
+  const pkg = findOptionalPackage(services, packageId);
+  const extras = findExtraServices(services, extraServiceIds);
   const normalizedArea = parseArea(area);
 
-  return Math.round(pkg.pricePerSqm * normalizedArea * type.coefficient);
+  if (!pkg && !extras.length) {
+    throw fail('Выберите основной пакет или хотя бы одну дополнительную услугу');
+  }
+
+  const baseTotal = pkg
+    ? Math.round(Number(pkg.pricePerSqm) * normalizedArea * Number(type.coefficient))
+    : 0;
+
+  const extrasTotal = extras.reduce(
+    (sum, extra) => sum + Math.round(Number(extra.price) || 0),
+    0
+  );
+
+  return {
+    propertyType: type.id,
+    propertyName: type.name,
+    coefficient: type.coefficient,
+    area: normalizedArea,
+    package: pkg
+      ? {
+          id: pkg.id,
+          name: pkg.name,
+          pricePerSqm: Number(pkg.pricePerSqm)
+        }
+      : null,
+    extras: extras.map((extra) => ({
+      id: extra.id,
+      name: extra.name,
+      price: Math.round(Number(extra.price) || 0)
+    })),
+    baseTotal,
+    extrasTotal,
+    total: baseTotal + extrasTotal
+  };
+}
+
+/**
+ * Считает итоговую стоимость заказа на сервере.
+ * Клиентская сумма полностью игнорируется.
+ * @param {string} propertyType
+ * @param {number} area
+ * @param {string|null} packageId
+ * @param {string[]} extraServiceIds
+ * @returns {number} итоговая стоимость в белорусских рублях (BYN)
+ */
+function calculateTotal(propertyType, area, packageId, extraServiceIds = []) {
+  return calculateBreakdown(propertyType, area, packageId, extraServiceIds).total;
 }
 
 /**
@@ -241,9 +378,10 @@ function updateTariff(packageId, newPrice) {
   return clone(pkg);
 }
 
-// Наружу экспортируются ТОЛЬКО три публичных метода.
+// Наружу экспортируются ТОЛЬКО публичные методы модуля.
 module.exports = {
   getServices,
+  calculateBreakdown,
   calculateTotal,
   updateTariff
 };

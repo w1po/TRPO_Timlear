@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * public/app.js — клиентская логика Timlear.
+ * public/app.js — клиентская логика Purity.
  * Всё общение с бизнес-логикой идёт только через REST API в server.js.
  * Клиент не знает, как устроены JSON-файлы и модули на сервере.
  */
@@ -11,7 +11,7 @@
    ========================================================================= */
 
 const API_BASE = '/api';
-const TOKEN_KEY = 'timlear_token';
+const TOKEN_KEY = 'purity_token';
 const STATUSES = ['Оплачен', 'В работе', 'Выполнен', 'Отменён'];
 const STATUS_CLASSES = {
   'Оплачен': 'status-paid',
@@ -33,7 +33,8 @@ const state = {
     address: '',
     date: '',
     time: '10:00',
-    packageId: 'general'
+    packageId: 'general',
+    extraServiceIds: []
   },
   orders: [],
   adminOrders: [],
@@ -224,20 +225,48 @@ function getPackage() {
     : null;
 }
 
+function getExtraServices() {
+  return state.services && Array.isArray(state.services.extraServices)
+    ? state.services.extraServices
+    : [];
+}
+
+function getSelectedExtras() {
+  const selectedIds = state.booking.extraServiceIds || [];
+  return getExtraServices().filter((extra) => selectedIds.includes(extra.id));
+}
+
 function getArea() {
   return Number(state.booking.area);
 }
 
 function calculatePreview() {
   const property = getProperty();
-  const pkg = getPackage();
   const area = getArea();
 
-  if (!property || !pkg || !Number.isFinite(area) || area < 10 || area > 1000) {
+  if (!property || !Number.isFinite(area) || area < 10 || area > 1000) {
     return null;
   }
 
-  return Math.round(pkg.pricePerSqm * area * property.coefficient);
+  const pkg = getPackage() || null;
+  const extras = getSelectedExtras();
+  const baseTotal = pkg
+    ? Math.round(Number(pkg.pricePerSqm) * area * Number(property.coefficient))
+    : 0;
+  const extrasTotal = extras.reduce(
+    (sum, extra) => sum + Math.round(Number(extra.price) || 0),
+    0
+  );
+
+  return {
+    property,
+    pkg,
+    extras,
+    area,
+    baseTotal,
+    extrasTotal,
+    total: baseTotal + extrasTotal
+  };
 }
 
 function isStep1Valid() {
@@ -253,7 +282,9 @@ function isStep1Valid() {
 }
 
 function isStep2Valid() {
-  if (!getPackage() || !state.booking.date || !state.booking.time) return false;
+  if ((!getPackage() && !getSelectedExtras().length) || !state.booking.date || !state.booking.time) {
+    return false;
+  }
   const slot = new Date(`${state.booking.date}T${state.booking.time}:00`);
   return !Number.isNaN(slot.getTime()) && slot.getTime() >= Date.now() - 30 * 60 * 1000;
 }
@@ -289,8 +320,10 @@ function validateStep1(showMessage = true) {
 }
 
 function validateStep2(showMessage = true) {
-  if (!getPackage()) {
-    if (showMessage) toast('Выберите пакет услуг', 'error');
+  if (!getPackage() && !getSelectedExtras().length) {
+    if (showMessage) {
+      toast('Выберите основной пакет или хотя бы одну дополнительную услугу', 'error');
+    }
     return false;
   }
   if (!state.booking.date) {
@@ -391,6 +424,7 @@ function renderHome() {
 
   renderProperties();
   renderPackages();
+  renderExtras();
   renderSummary();
   updateStepUI();
 }
@@ -433,6 +467,38 @@ function renderPackages() {
       <span class="package-check"><i data-lucide="check"></i> Выбрано</span>
     </button>
   `).join('');
+
+  const noPackageOption = $('#no-package-option');
+  if (noPackageOption) {
+    noPackageOption.classList.toggle('selected', !getPackage());
+  }
+}
+
+function renderExtras() {
+  const container = $('#extra-options');
+  if (!container || !state.services) return;
+
+  const extras = getExtraServices();
+  if (!extras.length) {
+    container.innerHTML = '<p class="extras-empty">Дополнительные услуги временно недоступны.</p>';
+    return;
+  }
+
+  container.innerHTML = extras.map((extra) => {
+    const selected = state.booking.extraServiceIds.includes(extra.id);
+    return `
+      <button class="extra-card ${selected ? 'selected' : ''}" type="button"
+              data-extra-id="${escapeHtml(extra.id)}" aria-pressed="${selected}">
+        <span class="extra-check"><i data-lucide="check"></i></span>
+        <span class="extra-icon"><i data-lucide="${escapeHtml(extra.icon || 'sparkles')}"></i></span>
+        <span class="extra-copy">
+          <strong>${escapeHtml(extra.name)}</strong>
+          <small>${escapeHtml(extra.hint || 'Дополнительная услуга к заказу')}</small>
+        </span>
+        <span class="extra-price">${formatMoney(extra.price)}</span>
+      </button>
+    `;
+  }).join('');
 }
 
 function renderSummary() {
@@ -441,26 +507,41 @@ function renderSummary() {
   const payButton = $('#summary-pay');
   if (!empty || !details || !payButton) return;
 
-  const property = getProperty();
-  const pkg = getPackage();
-  const area = getArea();
-  const total = calculatePreview();
-  const valid = Boolean(property && pkg && total !== null);
+  const preview = calculatePreview();
+  const hasSelection = Boolean(preview && (preview.pkg || preview.extras.length));
 
-  empty.classList.toggle('hidden', valid);
-  details.classList.toggle('hidden', !valid);
-  payButton.classList.toggle('hidden', !valid);
+  empty.classList.toggle('hidden', Boolean(preview));
+  details.classList.toggle('hidden', !preview);
+  payButton.classList.toggle('hidden', !preview || !hasSelection);
 
-  if (!valid) {
+  if (!preview) {
     details.innerHTML = '';
     return;
   }
+
+  const { property, pkg, extras, area, baseTotal, extrasTotal, total } = preview;
+  const extrasList = extras.length
+    ? `
+      <div class="summary-extra-list">
+        ${extras.map((extra) => `
+          <div class="summary-extra-item">
+            <span>${escapeHtml(extra.name)}</span>
+            <strong>${formatMoney(extra.price)}</strong>
+          </div>
+        `).join('')}
+      </div>
+      <div class="summary-extra-total">
+        <span>Доп. услуги</span>
+        <strong>${formatMoney(extrasTotal)}</strong>
+      </div>
+    `
+    : '<span class="summary-extra-empty">Не выбраны</span>';
 
   details.innerHTML = `
     <div class="summary-lines">
       <div class="summary-line">
         <span>Пакет</span>
-        <strong>${escapeHtml(pkg.name)}</strong>
+        <strong>${pkg ? escapeHtml(pkg.name) : 'Без пакета'}</strong>
       </div>
       <div class="summary-line">
         <span>Помещение</span>
@@ -470,10 +551,23 @@ function renderSummary() {
         <span>Площадь</span>
         <strong>${formatNumber(area)} м²</strong>
       </div>
-      <div class="summary-line">
-        <span>Тариф</span>
-        <strong>${formatMoney(pkg.pricePerSqm)} / м²</strong>
+      ${pkg ? `
+        <div class="summary-line">
+          <span>Тариф пакета</span>
+          <strong>${formatMoney(pkg.pricePerSqm)} / м²</strong>
+        </div>
+      ` : ''}
+      <div class="summary-line summary-line-subtotal">
+        <span>Стоимость пакета</span>
+        <strong>${formatMoney(baseTotal)}</strong>
       </div>
+      <div class="summary-extra-block">
+        <span class="summary-extra-title">Дополнительные услуги</span>
+        ${extrasList}
+      </div>
+      ${!hasSelection ? `
+        <p class="summary-alert">Выберите пакет или хотя бы одну дополнительную услугу, чтобы перейти к оплате.</p>
+      ` : ''}
     </div>
     <div class="summary-total">
       <span>К оплате</span>
@@ -481,7 +575,7 @@ function renderSummary() {
     </div>
   `;
 
-  payButton.querySelector('span').textContent = 'Оплатить';
+  payButton.querySelector('span').textContent = hasSelection ? 'Оплатить' : 'Выберите услугу';
 }
 
 function updateStepUI() {
@@ -497,10 +591,13 @@ function updateStepUI() {
 
   updatePaymentState();
 
-  const total = calculatePreview();
+  const preview = calculatePreview();
+  const hasSelection = Boolean(preview && (preview.pkg || preview.extras.length));
   const payLabel = $('#pay-button-label');
   if (payLabel) {
-    payLabel.textContent = total !== null ? `Оплатить ${formatMoney(total)}` : 'Оплатить';
+    payLabel.textContent = hasSelection
+      ? `Оплатить ${formatMoney(preview.total)}`
+      : 'Оплатить';
   }
 }
 
@@ -509,6 +606,16 @@ function scrollToBooking() {
   if (!card) return;
   const top = card.getBoundingClientRect().top + window.scrollY - 96;
   window.scrollTo({ top, behavior: 'smooth' });
+}
+
+function openAddressMap() {
+  const address = ($('#address')?.value || state.booking.address || '').trim();
+  const query = address ? `Минск, ${address}` : 'Минск';
+  window.open(
+    `https://yandex.by/maps/?text=${encodeURIComponent(query)}`,
+    '_blank',
+    'noopener,noreferrer'
+  );
 }
 
 function goToStep(target, options = {}) {
@@ -640,7 +747,8 @@ async function submitPayment(event) {
         address: state.booking.address.trim(),
         date: state.booking.date,
         time: state.booking.time,
-        packageId: state.booking.packageId
+        packageId: state.booking.packageId || null,
+        extraServiceIds: state.booking.extraServiceIds
       }
     });
 
@@ -657,8 +765,11 @@ async function submitPayment(event) {
     toast(error.message, 'error');
   } finally {
     button.disabled = false;
-    const total = calculatePreview();
-    label.textContent = total !== null ? `Оплатить ${formatMoney(total)}` : 'Оплатить';
+    const preview = calculatePreview();
+    const hasSelection = Boolean(preview && (preview.pkg || preview.extras.length));
+    label.textContent = hasSelection
+      ? `Оплатить ${formatMoney(preview.total)}`
+      : 'Оплатить';
   }
 }
 
@@ -667,10 +778,30 @@ function statusBadge(status) {
   return `<span class="status-badge ${className}">${escapeHtml(status)}</span>`;
 }
 
+function getOrderExtras(order) {
+  return Array.isArray(order.extras) ? order.extras : [];
+}
+
+function orderExtrasText(order) {
+  const extras = getOrderExtras(order);
+  return extras.length
+    ? extras.map((extra) => extra.name).join(', ')
+    : 'Без доп. услуг';
+}
+
 function receiptHTML(order) {
   const isPaid = order.status === 'Оплачен';
   const status = statusBadge(order.status);
   const coefficient = Number(order.coefficient) || 1;
+  const extras = getOrderExtras(order);
+  const hasPackage = Boolean(order.packageId);
+  const packageName = hasPackage ? order.packageName : 'Без пакета';
+  const baseTotal = order.baseTotal != null
+    ? Number(order.baseTotal) || 0
+    : (hasPackage ? Number(order.total) || 0 : 0);
+  const extrasTotal = order.extrasTotal != null
+    ? Number(order.extrasTotal) || 0
+    : extras.reduce((sum, extra) => sum + (Number(extra.price) || 0), 0);
 
   return `
     <article class="receipt-paper">
@@ -678,8 +809,8 @@ function receiptHTML(order) {
         <div class="receipt-brand">
           <span class="brand-mark"><i data-lucide="shield-check"></i></span>
           <div>
-            <strong>Timlear</strong>
-            <small>cleaning service · виртуальная квитанция</small>
+            <strong>Purity</strong>
+            <small>royal cleaning service · виртуальная квитанция</small>
           </div>
         </div>
         <div class="receipt-number-box">
@@ -704,9 +835,9 @@ function receiptHTML(order) {
 
       <div class="receipt-service">
         <div>
-          <span>Услуга</span>
-          <strong>${escapeHtml(order.packageName)}</strong>
-          <small>Пакет клининга Timlear</small>
+          <span>Основной пакет</span>
+          <strong>${escapeHtml(packageName)}</strong>
+          <small>${hasPackage ? 'Пакет клининга Purity' : 'Заказ только из дополнительных услуг'}</small>
         </div>
         <div>
           <span>Помещение</span>
@@ -714,11 +845,29 @@ function receiptHTML(order) {
           <small>${formatNumber(order.area)} м²</small>
         </div>
         <div>
-          <span>Стоимость</span>
-          <strong>${formatMoney(order.total)}</strong>
-          <small>${formatMoney(order.pricePerSqm)} / м²</small>
+          <span>Стоимость пакета</span>
+          <strong>${formatMoney(baseTotal)}</strong>
+          <small>${hasPackage ? `${formatMoney(order.pricePerSqm)} / м²` : 'Пакет не выбран'}</small>
         </div>
       </div>
+
+      ${extras.length ? `
+        <div class="receipt-extras">
+          <div class="receipt-caption">Дополнительные услуги</div>
+          <div class="receipt-lines">
+            ${extras.map((extra) => `
+              <div class="receipt-line">
+                <span>${escapeHtml(extra.name)}</span>
+                <strong>${formatMoney(extra.price)}</strong>
+              </div>
+            `).join('')}
+            <div class="receipt-line receipt-extras-total">
+              <span>Итого за дополнительные услуги</span>
+              <strong>${formatMoney(extrasTotal)}</strong>
+            </div>
+          </div>
+        </div>
+      ` : ''}
 
       <div class="receipt-lines">
         <div class="receipt-line">
@@ -731,11 +880,23 @@ function receiptHTML(order) {
         </div>
         <div class="receipt-line">
           <span>Расчёт</span>
-          <strong>${formatMoney(order.pricePerSqm)} × ${formatNumber(order.area)} м² × ${formatNumber(coefficient)}</strong>
+          <strong>${hasPackage
+            ? `${formatMoney(order.pricePerSqm)} × ${formatNumber(order.area)} м² × ${formatNumber(coefficient)}`
+            : 'Только дополнительные услуги'}</strong>
         </div>
+        ${extras.length ? `
+          <div class="receipt-line">
+            <span>Пакет</span>
+            <strong>${formatMoney(baseTotal)}</strong>
+          </div>
+          <div class="receipt-line">
+            <span>Доп. услуги</span>
+            <strong>${formatMoney(extrasTotal)}</strong>
+          </div>
+        ` : ''}
         <div class="receipt-line">
           <span>Способ оплаты</span>
-          <strong>Демо-карта Timlear PAY</strong>
+          <strong>Демо-карта Purity PAY</strong>
         </div>
       </div>
 
@@ -747,7 +908,7 @@ function receiptHTML(order) {
       <div class="receipt-status-row">
         <div>
           ${status}
-          <small style="display:block;margin-top:4px;color:var(--muted);font-size:8.5px;">
+          <small class="receipt-status-note">
             ${isPaid ? `Оплачено ${formatDateTime(order.paidAt)}` : `Обновлено ${formatDateTime(order.updatedAt)}`}
           </small>
         </div>
@@ -762,7 +923,7 @@ function receiptHTML(order) {
         <div class="barcode" aria-hidden="true"></div>
       </div>
 
-      <div class="receipt-footnote">Timlear · заказ ${escapeHtml(order.id)} · demo receipt</div>
+      <div class="receipt-footnote">Purity · заказ ${escapeHtml(order.id)} · demo receipt</div>
     </article>
   `;
 }
@@ -807,7 +968,7 @@ function renderAccount() {
       </div>
     </div>
     <div class="profile-meta">
-      <small>В Timlear с</small>
+      <small>В Purity с</small>
       <strong>${escapeHtml(registered)}</strong>
     </div>
   `;
@@ -864,8 +1025,9 @@ function renderAccountOrders() {
               </td>
               <td data-label="Услуга">
                 <div class="cell-main">
-                  <strong>${escapeHtml(order.packageName)}</strong>
+                  <strong>${escapeHtml(order.packageName || 'Без пакета')}</strong>
                   <small>${escapeHtml(order.propertyName)} · ${formatNumber(order.area)} м²</small>
+                  <small class="cell-extras">${escapeHtml(orderExtrasText(order))}</small>
                 </div>
               </td>
               <td data-label="Дата уборки">
@@ -1029,8 +1191,9 @@ function renderAdminOrders() {
               </td>
               <td data-label="Услуга">
                 <div class="cell-main">
-                  <strong>${escapeHtml(order.packageName)}</strong>
+                  <strong>${escapeHtml(order.packageName || 'Без пакета')}</strong>
                   <small>${escapeHtml(order.propertyName)} · ${formatNumber(order.area)} м²</small>
+                  <small class="cell-extras">${escapeHtml(orderExtrasText(order))}</small>
                 </div>
               </td>
               <td data-label="Уборка">
@@ -1280,7 +1443,8 @@ function resetBooking() {
     address: '',
     date: getTomorrow(),
     time: '10:00',
-    packageId: 'general'
+    packageId: 'general',
+    extraServiceIds: []
   };
   state.step = 1;
   state.paidOrder = null;
@@ -1316,9 +1480,27 @@ function bindEvents() {
 
     const packageCard = event.target.closest('[data-package-id]');
     if (packageCard) {
-      state.booking.packageId = packageCard.dataset.packageId;
+      const nextPackageId = packageCard.dataset.packageId || '';
+      state.booking.packageId = state.booking.packageId === nextPackageId ? '' : nextPackageId;
       resetPaymentIfNeeded();
       renderPackages();
+      renderSummary();
+      updateStepUI();
+      refreshIcons();
+      return;
+    }
+
+    const extraCard = event.target.closest('[data-extra-id]');
+    if (extraCard) {
+      const extraId = extraCard.dataset.extraId;
+      const selected = state.booking.extraServiceIds || [];
+      state.booking.extraServiceIds = selected.includes(extraId)
+        ? selected.filter((id) => id !== extraId)
+        : [...selected, extraId];
+      resetPaymentIfNeeded();
+      renderExtras();
+      renderSummary();
+      updateStepUI();
       refreshIcons();
       return;
     }
@@ -1389,6 +1571,8 @@ function bindEvents() {
     state.booking.address = event.target.value;
     resetPaymentIfNeeded();
   });
+
+  $('#address-map-btn').addEventListener('click', openAddressMap);
 
   $('#cleaning-date').addEventListener('change', (event) => {
     state.booking.date = event.target.value;
@@ -1499,6 +1683,9 @@ async function init() {
     if (!services.packages.some((pkg) => pkg.id === state.booking.packageId)) {
       state.booking.packageId = services.packages[0]?.id || '';
     }
+
+    const extraIds = new Set((services.extraServices || []).map((extra) => extra.id));
+    state.booking.extraServiceIds = state.booking.extraServiceIds.filter((id) => extraIds.has(id));
   } catch (error) {
     toast(`Не удалось загрузить тарифы: ${error.message}`, 'error');
   }

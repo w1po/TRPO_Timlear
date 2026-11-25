@@ -206,14 +206,31 @@ app.post(
   '/api/orders',
   requireAuth,
   handle((req, res) => {
-    const { propertyType, area, address, date, time, packageId } = req.body || {};
+    const { propertyType, area, address, date, time, packageId, extraServiceIds } = req.body || {};
 
     const services = calculatorModule.getServices();
     const property = services.propertyTypes.find((item) => item.id === propertyType);
     if (!property) throw httpError('Выберите тип помещения');
 
-    const pkg = services.packages.find((item) => item.id === packageId);
-    if (!pkg) throw httpError('Выберите пакет услуг');
+    if (extraServiceIds != null && !Array.isArray(extraServiceIds)) {
+      throw httpError('Некорректный список дополнительных услуг');
+    }
+
+    const requestedPackageId = packageId && packageId !== 'none' ? String(packageId) : null;
+    const pkg = requestedPackageId
+      ? services.packages.find((item) => item.id === requestedPackageId)
+      : null;
+    if (requestedPackageId && !pkg) {
+      throw httpError('Неизвестный пакет услуг');
+    }
+
+    const extraIds = Array.isArray(extraServiceIds)
+      ? [...new Set(extraServiceIds.map((id) => String(id || '').trim()).filter(Boolean))]
+      : [];
+
+    if (!pkg && !extraIds.length) {
+      throw httpError('Выберите основной пакет или хотя бы одну дополнительную услугу');
+    }
 
     const cleanAddress = String(address || '').trim();
     if (cleanAddress.length < 5) {
@@ -224,25 +241,33 @@ app.post(
     }
     assertBookingSlot(date, time);
 
-    // Ключевая связь модулей: сумма пересчитывается на сервере.
+    // Ключевая связь модулей: сумма и состав заказа пересчитываются на сервере.
     // Значение total из браузера полностью игнорируется.
-    const verifiedTotal = calculatorModule.calculateTotal(propertyType, area, packageId);
+    const breakdown = calculatorModule.calculateBreakdown(
+      propertyType,
+      area,
+      pkg ? pkg.id : null,
+      extraIds
+    );
 
     const order = orderModule.createOrder({
       userId: req.user.id,
       userName: req.user.name,
       userEmail: req.user.email,
-      propertyType: property.id,
-      propertyName: property.name,
-      coefficient: property.coefficient,
-      packageId: pkg.id,
-      packageName: pkg.name,
-      pricePerSqm: pkg.pricePerSqm,
-      area: Number(area),
+      propertyType: breakdown.propertyType,
+      propertyName: breakdown.propertyName,
+      coefficient: breakdown.coefficient,
+      packageId: breakdown.package ? breakdown.package.id : null,
+      packageName: breakdown.package ? breakdown.package.name : 'Без пакета',
+      pricePerSqm: breakdown.package ? breakdown.package.pricePerSqm : 0,
+      baseTotal: breakdown.baseTotal,
+      extras: breakdown.extras,
+      extrasTotal: breakdown.extrasTotal,
+      area: breakdown.area,
       address: cleanAddress,
       date,
       time,
-      total: verifiedTotal
+      total: breakdown.total
     });
 
     res.status(201).json({ order });
@@ -351,7 +376,7 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log('');
     console.log('  ╔══════════════════════════════════════════════════════╗');
-    console.log('  ║   TIMLEAR · CLEANING SERVICE                         ║');
+    console.log('  ║   PURITY · ROYAL CLEANING SERVICE                    ║');
     console.log('  ╚══════════════════════════════════════════════════════╝');
     console.log(`  Сервер запущен:  http://localhost:${PORT}`);
     console.log('');

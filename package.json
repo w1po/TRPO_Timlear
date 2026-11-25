@@ -1,7 +1,7 @@
 {
-  "name": "timlear",
+  "name": "purity-cleaning",
   "version": "1.0.0",
-  "description": "Timlear — клининг-сервис в Беларуси: расчёт, онлайн-оплата и виртуальные квитанции",
+  "description": "Purity — королевский клининг-сервис в Беларуси: расчёт, онлайн-оплата и виртуальные квитанции",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,7 +10,7 @@
   "keywords": [
     "express",
     "cleaning",
-    "timlear",
+    "purity",
     "modular-programming"
   ],
   "author": "Artem",

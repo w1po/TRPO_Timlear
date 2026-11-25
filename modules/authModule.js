@@ -161,7 +161,7 @@ function seedDefaultUsers() {
       id: 'usr_admin',
       name: 'Администратор',
       login: 'admin',
-      email: 'admin@timlear.by',
+      email: 'admin@purity.by',
       phone: '+375 (29) 111-22-33',
       role: 'admin',
       ...password,

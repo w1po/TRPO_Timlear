@@ -100,11 +100,11 @@ function receiptDatePart(date = new Date()) {
 }
 
 /**
- * Генерирует уникальный номер квитанции вида TL-20261120-0001.
+ * Генерирует уникальный номер квитанции вида PR-20261120-0001.
  * Номер не повторяется даже при параллельном создании заказов.
  */
 function generateReceiptNumber(orders) {
-  const prefix = `TL-${receiptDatePart()}-`;
+  const prefix = `PR-${receiptDatePart()}-`;
   const sequences = orders
     .filter((order) => String(order.receiptNumber).startsWith(prefix))
     .map((order) => Number(String(order.receiptNumber).slice(prefix.length)))
@@ -128,6 +128,35 @@ function requireText(value, fieldName, maxLength = 200) {
     throw fail(`Не заполнено поле «${fieldName}»`);
   }
   return text.slice(0, maxLength);
+}
+
+/** Возвращает необязательную строку (для заказа без основного пакета). */
+function optionalText(value, maxLength = 200) {
+  return String(value == null ? '' : value).trim().slice(0, maxLength);
+}
+
+/** Проверяет и нормализует список выбранных дополнительных услуг. */
+function normalizeExtras(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value)) {
+    throw fail('Некорректный список дополнительных услуг');
+  }
+
+  return value.map((extra) => {
+    if (!extra || typeof extra !== 'object') {
+      throw fail('Некорректная дополнительная услуга');
+    }
+
+    const id = optionalText(extra.id, 40);
+    const name = requireText(extra.name, 'название дополнительной услуги', 120);
+    const price = Number(extra.price);
+
+    if (!id || !Number.isFinite(price) || price < 0) {
+      throw fail('Некорректная дополнительная услуга');
+    }
+
+    return { id, name, price: Math.round(price) };
+  });
 }
 
 /** Проверяет формат даты YYYY-MM-DD. */
@@ -171,6 +200,17 @@ function createOrder(orderPayload = {}) {
   const orders = readOrders();
   const now = new Date().toISOString();
 
+  const packageId = optionalText(orderPayload.packageId, 40);
+  const extras = normalizeExtras(orderPayload.extras);
+  const hasPackage = Boolean(packageId);
+
+  if (!hasPackage && !extras.length) {
+    throw fail('Выберите основной пакет или хотя бы одну дополнительную услугу');
+  }
+
+  const baseTotal = Number(orderPayload.baseTotal) || 0;
+  const extrasTotal = Number(orderPayload.extrasTotal) || 0;
+
   const order = {
     id: `ord_${crypto.randomUUID().slice(0, 8)}`,
     receiptNumber: generateReceiptNumber(orders),
@@ -184,9 +224,12 @@ function createOrder(orderPayload = {}) {
     propertyType: requireText(orderPayload.propertyType, 'тип помещения', 40),
     propertyName: requireText(orderPayload.propertyName, 'название помещения', 80),
     coefficient: Number(orderPayload.coefficient) || 1,
-    packageId: requireText(orderPayload.packageId, 'пакет услуг', 40),
-    packageName: requireText(orderPayload.packageName, 'название пакета', 80),
-    pricePerSqm: Number(orderPayload.pricePerSqm) || 0,
+    packageId: hasPackage ? packageId : null,
+    packageName: hasPackage ? requireText(orderPayload.packageName, 'название пакета', 80) : 'Без пакета',
+    pricePerSqm: hasPackage ? Number(orderPayload.pricePerSqm) || 0 : 0,
+    baseTotal: Math.round(baseTotal),
+    extras,
+    extrasTotal: Math.round(extrasTotal),
     area: Number(orderPayload.area) || 0,
     address: requireText(orderPayload.address, 'адрес', 250),
     date: requireDate(orderPayload.date),
