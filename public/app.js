@@ -20,6 +20,22 @@ const STATUS_CLASSES = {
   'Отменён': 'status-cancelled'
 };
 
+const TIME_SLOTS = ['09:00', '10:00', '11:30', '13:00', '14:30', '16:00', '17:30', '19:00'];
+const MONTHS = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+];
+const MONTHS_GENITIVE = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+];
+const WEEKDAYS_FULL = [
+  'Воскресенье', 'Понедельник', 'Вторник', 'Среда',
+  'Четверг', 'Пятница', 'Суббота'
+];
+const MINSK_CENTER = [53.9006, 27.5590];
+const MINSK_VIEWBOX = '27.30,54.10,27.80,53.75';
+
 const state = {
   token: localStorage.getItem(TOKEN_KEY) || '',
   user: null,
@@ -27,6 +43,10 @@ const state = {
   view: 'home',
   step: 1,
   authIntent: 'default',
+  calendar: {
+    year: new Date().getFullYear(),
+    month: new Date().getMonth()
+  },
   booking: {
     propertyType: 'apartment',
     area: 45,
@@ -75,6 +95,22 @@ function formatDateLong(dateString) {
   const date = new Date(`${dateString}T00:00:00`);
   if (Number.isNaN(date.getTime())) return dateString;
   return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function formatSelectedDate(dateString) {
+  if (!dateString) return 'Дата не выбрана';
+  const date = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateString;
+  const withYear = date.getFullYear() !== new Date().getFullYear()
+    ? ` ${date.getFullYear()}`
+    : '';
+  return `${WEEKDAYS_FULL[date.getDay()]}, ${date.getDate()} ${MONTHS_GENITIVE[date.getMonth()]}${withYear}`;
+}
+
+function isPastSlot(dateString, slot) {
+  if (!dateString) return true;
+  const value = new Date(`${dateString}T${slot}:00`);
+  return Number.isNaN(value.getTime()) || value.getTime() < Date.now() - 30 * 60 * 1000;
 }
 
 function escapeHtml(value) {
@@ -292,10 +328,11 @@ function isStep2Valid() {
 function markInvalid(input) {
   if (!input) return;
   const field = input.closest('.field');
-  if (field) field.classList.add('is-invalid');
-  input.focus({ preventScroll: true });
-  input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  setTimeout(() => field && field.classList.remove('is-invalid'), 2600);
+  const target = field || input;
+  target.classList.add('is-invalid');
+  if (typeof input.focus === 'function') input.focus({ preventScroll: true });
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => target.classList.remove('is-invalid'), 2600);
 }
 
 function validateStep1(showMessage = true) {
@@ -328,19 +365,19 @@ function validateStep2(showMessage = true) {
   }
   if (!state.booking.date) {
     if (showMessage) toast('Выберите дату уборки', 'error');
-    markInvalid($('#cleaning-date'));
+    markInvalid($('#calendar-card'));
     return false;
   }
   if (!state.booking.time) {
     if (showMessage) toast('Выберите время уборки', 'error');
-    markInvalid($('#cleaning-time'));
+    markInvalid($('#time-card'));
     return false;
   }
 
   const slot = new Date(`${state.booking.date}T${state.booking.time}:00`);
   if (Number.isNaN(slot.getTime()) || slot.getTime() < Date.now() - 30 * 60 * 1000) {
     if (showMessage) toast('Выберите будущую дату и время', 'error');
-    markInvalid($('#cleaning-time'));
+    markInvalid($('#time-card'));
     return false;
   }
 
@@ -409,22 +446,16 @@ function navigate(view) {
 function renderHome() {
   if (!state.services) return;
 
-  const dateInput = $('#cleaning-date');
-  const timeInput = $('#cleaning-time');
   const areaInput = $('#area');
   const addressInput = $('#address');
 
-  if (dateInput) {
-    dateInput.min = getToday();
-    dateInput.value = state.booking.date;
-  }
-  if (timeInput) timeInput.value = state.booking.time;
   if (areaInput) areaInput.value = state.booking.area;
   if (addressInput) addressInput.value = state.booking.address;
 
   renderProperties();
   renderPackages();
   renderExtras();
+  renderSchedule();
   renderSummary();
   updateStepUI();
 }
@@ -448,7 +479,7 @@ function renderPackages() {
   const container = $('#package-options');
   if (!container || !state.services) return;
 
-  container.innerHTML = state.services.packages.map((pkg) => `
+  const packageCards = state.services.packages.map((pkg) => `
     <button class="package-card ${pkg.highlight ? 'premium' : ''} ${pkg.id === state.booking.packageId ? 'selected' : ''}"
             type="button" data-package-id="${escapeHtml(pkg.id)}">
       <span class="package-top">
@@ -466,12 +497,31 @@ function renderPackages() {
       </ul>
       <span class="package-check"><i data-lucide="check"></i> Выбрано</span>
     </button>
-  `).join('');
+  `);
 
-  const noPackageOption = $('#no-package-option');
-  if (noPackageOption) {
-    noPackageOption.classList.toggle('selected', !getPackage());
-  }
+  const noPackageCard = `
+    <button class="package-card package-card-none ${getPackage() ? '' : 'selected'}"
+            type="button" data-package-id="">
+      <span class="package-top">
+        <span class="package-icon"><i data-lucide="package-x"></i></span>
+        <span class="package-flag package-flag-none">Гибкий выбор</span>
+      </span>
+      <h3>Без основного пакета (только доп. услуги)</h3>
+      <p>Подходит, если нужно только помыть окна, диван или убрать балкон.</p>
+      <span class="package-price">
+        <strong>0</strong>
+        <span>Br / пакет</span>
+      </span>
+      <ul class="package-features">
+        <li>Только нужные дополнительные услуги</li>
+        <li>Без оплаты основного пакета</li>
+        <li>Идеально для точечной уборки</li>
+      </ul>
+      <span class="package-check"><i data-lucide="check"></i> Выбрано</span>
+    </button>
+  `;
+
+  container.innerHTML = [...packageCards, noPackageCard].join('');
 }
 
 function renderExtras() {
@@ -499,6 +549,113 @@ function renderExtras() {
       </button>
     `;
   }).join('');
+}
+
+function renderSchedule() {
+  renderCalendar();
+  renderTimeSlots();
+}
+
+function syncCalendarView(dateString) {
+  const date = dateString ? new Date(`${dateString}T00:00:00`) : new Date();
+  if (!Number.isNaN(date.getTime())) {
+    state.calendar = { year: date.getFullYear(), month: date.getMonth() };
+  }
+}
+
+function renderCalendar() {
+  const container = $('#calendar-days');
+  if (!container) return;
+
+  const { year, month } = state.calendar;
+  const title = $('#calendar-month');
+  if (title) title.textContent = `${MONTHS[month]} ${year}`;
+
+  const prev = $('#calendar-prev');
+  if (prev) {
+    const now = new Date();
+    prev.disabled = year === now.getFullYear() && month === now.getMonth();
+  }
+
+  const firstDay = new Date(year, month, 1);
+  const offset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayIso = getToday();
+  const cells = [];
+
+  for (let index = 0; index < 42; index += 1) {
+    const day = index - offset + 1;
+    if (day < 1 || day > daysInMonth) {
+      cells.push('<span class="calendar-day is-empty" aria-hidden="true"></span>');
+      continue;
+    }
+
+    const iso = toLocalISO(new Date(year, month, day));
+    const selected = iso === state.booking.date;
+    const disabled = iso < todayIso;
+    cells.push(`
+      <button class="calendar-day ${selected ? 'selected' : ''} ${iso === todayIso ? 'today' : ''}"
+              type="button" data-calendar-date="${iso}"
+              aria-label="${escapeHtml(formatSelectedDate(iso))}" aria-pressed="${selected}"
+              ${disabled ? 'disabled' : ''}>${day}</button>
+    `);
+  }
+
+  container.innerHTML = cells.join('');
+}
+
+function renderTimeSlots() {
+  const container = $('#time-slots');
+  if (!container) return;
+
+  const label = $('#selected-date-label');
+  if (label) {
+    label.textContent = state.booking.date
+      ? formatSelectedDate(state.booking.date)
+      : 'Сначала выберите дату';
+  }
+
+  container.innerHTML = TIME_SLOTS.map((slot) => {
+    const selected = slot === state.booking.time;
+    const disabled = isPastSlot(state.booking.date, slot);
+    return `
+      <button class="time-slot ${selected ? 'selected' : ''}" type="button"
+              data-time-slot="${slot}" aria-pressed="${selected}"
+              ${disabled ? 'disabled' : ''}>${slot}</button>
+    `;
+  }).join('');
+}
+
+function shiftCalendarMonth(delta) {
+  const next = new Date(state.calendar.year, state.calendar.month + delta, 1);
+  const now = new Date();
+  const min = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (next < min) return;
+
+  state.calendar = { year: next.getFullYear(), month: next.getMonth() };
+  renderCalendar();
+}
+
+function selectBookingDate(dateString) {
+  state.booking.date = dateString;
+
+  if (!state.booking.time || isPastSlot(dateString, state.booking.time)) {
+    state.booking.time = TIME_SLOTS.find((slot) => !isPastSlot(dateString, slot)) || '';
+  }
+
+  resetPaymentIfNeeded();
+  renderCalendar();
+  renderTimeSlots();
+  renderSummary();
+  updateStepUI();
+}
+
+function selectTimeSlot(slot) {
+  state.booking.time = slot;
+  resetPaymentIfNeeded();
+  renderTimeSlots();
+  renderSummary();
+  updateStepUI();
 }
 
 function renderSummary() {
@@ -550,6 +707,14 @@ function renderSummary() {
       <div class="summary-line">
         <span>Площадь</span>
         <strong>${formatNumber(area)} м²</strong>
+      </div>
+      <div class="summary-line">
+        <span>Дата</span>
+        <strong>${state.booking.date ? escapeHtml(formatSelectedDate(state.booking.date)) : 'Не выбрана'}</strong>
+      </div>
+      <div class="summary-line">
+        <span>Время</span>
+        <strong>${state.booking.time || 'Не выбрано'}</strong>
       </div>
       ${pkg ? `
         <div class="summary-line">
@@ -608,14 +773,276 @@ function scrollToBooking() {
   window.scrollTo({ top, behavior: 'smooth' });
 }
 
+const mapState = {
+  instance: null,
+  marker: null,
+  selection: null,
+  requestId: 0,
+  lastRequestAt: 0,
+  reverseTimer: null
+};
+
+function createMapMarkerIcon() {
+  return window.L.divIcon({
+    className: 'purity-map-marker',
+    html: `
+      <svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true">
+        <path d="M17 1C8.7 1 2 7.6 2 15.8c0 11.1 15 27.2 15 27.2s15-16.1 15-27.2C32 7.6 25.3 1 17 1z"
+              fill="#2B62A5" stroke="#D4AF37" stroke-width="2"/>
+        <circle cx="17" cy="16" r="5.5" fill="#FFFFFF"/>
+      </svg>
+    `,
+    iconSize: [34, 44],
+    iconAnchor: [17, 42]
+  });
+}
+
+function initAddressMap() {
+  if (mapState.instance) return true;
+  if (!window.L) {
+    toast('Не удалось загрузить карту. Проверьте подключение к интернету.', 'error');
+    return false;
+  }
+
+  const container = $('#address-map');
+  if (!container) return false;
+
+  const map = window.L.map(container, {
+    center: MINSK_CENTER,
+    zoom: 13,
+    zoomControl: true,
+    scrollWheelZoom: true
+  });
+
+  window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+  }).addTo(map);
+
+  const marker = window.L.marker(MINSK_CENTER, {
+    draggable: true,
+    icon: createMapMarkerIcon()
+  }).addTo(map);
+
+  marker.on('dragend', () => {
+    const point = marker.getLatLng();
+    scheduleReverseGeocode(point.lat, point.lng);
+  });
+
+  map.on('click', (event) => {
+    marker.setLatLng(event.latlng);
+    scheduleReverseGeocode(event.latlng.lat, event.latlng.lng);
+  });
+
+  mapState.instance = map;
+  mapState.marker = marker;
+  return true;
+}
+
+function setMapSelection(lat, lng, address, options = {}) {
+  const pending = Boolean(options.pending);
+  const addressElement = $('#map-selected-address');
+  const coordsElement = $('#map-selected-coords');
+  const applyButton = $('#map-apply-btn');
+  const card = $('.map-selected-card');
+
+  mapState.selection = pending || !address ? null : { lat, lng, address };
+
+  if (addressElement) {
+    addressElement.textContent = pending
+      ? 'Определяем адрес…'
+      : (address || 'Нажмите на карту или найдите адрес');
+  }
+  if (coordsElement) {
+    coordsElement.textContent = `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)} · OpenStreetMap`;
+  }
+  if (applyButton) applyButton.disabled = pending || !address;
+  if (card) card.classList.toggle('is-loading', pending);
+}
+
+function formatNominatimAddress(address = {}, displayName = '') {
+  const city = address.city || address.town || address.village || address.municipality || 'Минск';
+  const road = address.road || address.pedestrian || address.footway || address.path || '';
+  const house = address.house_number || '';
+
+  if (road) {
+    return `${city}, ${road}${house ? `, ${house}` : ''}`;
+  }
+  if (address.amenity) {
+    return `${city}, ${address.amenity}`;
+  }
+  if (displayName) {
+    const parts = displayName
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parts.length) return parts.slice(0, 4).join(', ');
+  }
+  return city;
+}
+
+async function nominatimFetch(url) {
+  const wait = Math.max(0, 1100 - (Date.now() - mapState.lastRequestAt));
+  if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+  mapState.lastRequestAt = Date.now();
+
+  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!response.ok) {
+    throw new Error(`геокодер ответил ${response.status}`);
+  }
+  return response.json();
+}
+
+async function reverseGeocode(lat, lng) {
+  const requestId = ++mapState.requestId;
+
+  try {
+    const params = new URLSearchParams({
+      format: 'jsonv2',
+      lat: String(lat),
+      lon: String(lng),
+      zoom: '18',
+      addressdetails: '1',
+      'accept-language': 'ru'
+    });
+    const data = await nominatimFetch(`https://nominatim.openstreetmap.org/reverse?${params}`);
+
+    if (requestId !== mapState.requestId) return;
+    const address = formatNominatimAddress(data.address, data.display_name);
+    if (!address) throw new Error('адрес не определён');
+    setMapSelection(lat, lng, address);
+  } catch (error) {
+    if (requestId !== mapState.requestId) return;
+    const fallback = `Минск, ${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
+    setMapSelection(lat, lng, fallback);
+    toast('Не удалось определить улицу — выберите точку ещё раз или воспользуйтесь поиском', 'error');
+  }
+}
+
+function scheduleReverseGeocode(lat, lng) {
+  clearTimeout(mapState.reverseTimer);
+  setMapSelection(lat, lng, '', { pending: true });
+  mapState.reverseTimer = setTimeout(() => reverseGeocode(lat, lng), 450);
+}
+
+function focusMapPoint(lat, lng, reverse = true) {
+  if (!mapState.instance || !mapState.marker) return;
+  const zoom = Math.max(mapState.instance.getZoom(), 15);
+  mapState.instance.setView([lat, lng], zoom);
+  mapState.marker.setLatLng([lat, lng]);
+  if (reverse) scheduleReverseGeocode(lat, lng);
+}
+
+async function searchAddress(query, options = {}) {
+  const clean = String(query || '').trim();
+  if (!clean) {
+    if (!options.silent) toast('Введите адрес для поиска', 'error');
+    return false;
+  }
+  if (!initAddressMap()) return false;
+
+  clearTimeout(mapState.reverseTimer);
+  const searchId = ++mapState.requestId;
+
+  const button = $('#map-search-btn');
+  const label = button ? button.querySelector('span') : null;
+  const originalLabel = label ? label.textContent : 'Найти';
+  if (button) button.disabled = true;
+  if (label) label.textContent = 'Ищем…';
+
+  try {
+    const fullQuery = /минск/i.test(clean) ? clean : `${clean}, Минск`;
+    const params = new URLSearchParams({
+      format: 'jsonv2',
+      q: fullQuery,
+      addressdetails: '1',
+      limit: '1',
+      'accept-language': 'ru',
+      countrycodes: 'by',
+      viewbox: MINSK_VIEWBOX,
+      bounded: '1'
+    });
+    const results = await nominatimFetch(`https://nominatim.openstreetmap.org/search?${params}`);
+
+    if (searchId !== mapState.requestId) return false;
+    if (!Array.isArray(results) || !results.length) {
+      if (!options.silent) toast('Адрес не найден. Уточните улицу и номер дома.', 'error');
+      return false;
+    }
+
+    const result = results[0];
+    const lat = Number(result.lat);
+    const lng = Number(result.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error('некорректные координаты');
+    }
+
+    mapState.instance.setView([lat, lng], 16);
+    mapState.marker.setLatLng([lat, lng]);
+    setMapSelection(lat, lng, formatNominatimAddress(result.address, result.display_name));
+    return true;
+  } catch (error) {
+    if (!options.silent) toast(`Не удалось найти адрес: ${error.message}`, 'error');
+    return false;
+  } finally {
+    if (button) button.disabled = false;
+    if (label) label.textContent = originalLabel;
+  }
+}
+
 function openAddressMap() {
-  const address = ($('#address')?.value || state.booking.address || '').trim();
-  const query = address ? `Минск, ${address}` : 'Минск';
-  window.open(
-    `https://yandex.by/maps/?text=${encodeURIComponent(query)}`,
-    '_blank',
-    'noopener,noreferrer'
-  );
+  openModal('map-modal');
+  refreshIcons();
+
+  setTimeout(() => {
+    if (!initAddressMap()) return;
+    mapState.instance.invalidateSize();
+
+    const currentAddress = ($('#address')?.value || state.booking.address || '').trim();
+    const searchInput = $('#map-search-input');
+    if (searchInput) searchInput.value = currentAddress;
+
+    if (mapState.selection && currentAddress === mapState.selection.address) {
+      mapState.instance.setView([mapState.selection.lat, mapState.selection.lng], 16);
+      mapState.marker.setLatLng([mapState.selection.lat, mapState.selection.lng]);
+      setMapSelection(mapState.selection.lat, mapState.selection.lng, mapState.selection.address);
+      return;
+    }
+
+    if (currentAddress.length >= 3) {
+      searchAddress(currentAddress, { silent: true }).then((found) => {
+        if (!found) {
+          focusMapPoint(MINSK_CENTER[0], MINSK_CENTER[1], false);
+          setMapSelection(MINSK_CENTER[0], MINSK_CENTER[1], '');
+        }
+      });
+      return;
+    }
+
+    if (mapState.selection) {
+      mapState.instance.setView([mapState.selection.lat, mapState.selection.lng], 16);
+      mapState.marker.setLatLng([mapState.selection.lat, mapState.selection.lng]);
+      setMapSelection(mapState.selection.lat, mapState.selection.lng, mapState.selection.address);
+      return;
+    }
+
+    focusMapPoint(MINSK_CENTER[0], MINSK_CENTER[1], false);
+    setMapSelection(MINSK_CENTER[0], MINSK_CENTER[1], '');
+  }, 150);
+}
+
+function applyMapAddress() {
+  const selection = mapState.selection;
+  if (!selection || !selection.address) return;
+
+  state.booking.address = selection.address;
+  const input = $('#address');
+  if (input) input.value = selection.address;
+
+  resetPaymentIfNeeded();
+  closeModal('map-modal');
+  refreshIcons();
+  toast('Адрес выбран на карте', 'success');
 }
 
 function goToStep(target, options = {}) {
@@ -1448,6 +1875,7 @@ function resetBooking() {
   };
   state.step = 1;
   state.paidOrder = null;
+  syncCalendarView(state.booking.date);
   updatePaymentState();
   initDemoCard();
   renderHome();
@@ -1574,15 +2002,31 @@ function bindEvents() {
 
   $('#address-map-btn').addEventListener('click', openAddressMap);
 
-  $('#cleaning-date').addEventListener('change', (event) => {
-    state.booking.date = event.target.value;
-    resetPaymentIfNeeded();
-    renderSummary();
+  $('#map-search-btn').addEventListener('click', () => {
+    searchAddress($('#map-search-input').value);
   });
 
-  $('#cleaning-time').addEventListener('change', (event) => {
-    state.booking.time = event.target.value;
-    resetPaymentIfNeeded();
+  $('#map-search-input').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    searchAddress(event.target.value);
+  });
+
+  $('#map-apply-btn').addEventListener('click', applyMapAddress);
+
+  $('#calendar-prev').addEventListener('click', () => shiftCalendarMonth(-1));
+  $('#calendar-next').addEventListener('click', () => shiftCalendarMonth(1));
+
+  $('#calendar-days').addEventListener('click', (event) => {
+    const day = event.target.closest('[data-calendar-date]');
+    if (!day || day.disabled) return;
+    selectBookingDate(day.dataset.calendarDate);
+  });
+
+  $('#time-slots').addEventListener('click', (event) => {
+    const slot = event.target.closest('[data-time-slot]');
+    if (!slot || slot.disabled) return;
+    selectTimeSlot(slot.dataset.timeSlot);
   });
 
   // Форма оплаты
@@ -1672,6 +2116,7 @@ async function restoreSession() {
 
 async function init() {
   state.booking.date = getTomorrow();
+  syncCalendarView(state.booking.date);
   $('#footer-year').textContent = String(new Date().getFullYear());
 
   bindEvents();

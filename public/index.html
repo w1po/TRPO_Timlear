@@ -7,7 +7,11 @@
   <title>Purity — клининг-сервис</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -153,34 +157,41 @@
               <p>Основной пакет необязателен: можно заказать только дополнительные услуги. Слот выберите ниже — мы приедем точно по времени.</p>
             </div>
 
-            <div class="form-grid time-grid">
-              <div class="field">
-                <label for="cleaning-date">Дата уборки</label>
-                <div class="input-wrap">
-                  <i data-lucide="calendar-days"></i>
-                  <input id="cleaning-date" type="date">
+            <div class="schedule-widget">
+              <div class="calendar-card" id="calendar-card">
+                <div class="calendar-head">
+                  <button class="calendar-nav" type="button" id="calendar-prev" aria-label="Предыдущий месяц">
+                    <i data-lucide="chevron-left"></i>
+                  </button>
+                  <div class="calendar-heading">
+                    <strong id="calendar-month">Ноябрь 2026</strong>
+                    <span>Выберите дату уборки</span>
+                  </div>
+                  <button class="calendar-nav" type="button" id="calendar-next" aria-label="Следующий месяц">
+                    <i data-lucide="chevron-right"></i>
+                  </button>
                 </div>
+                <div class="calendar-weekdays" aria-hidden="true">
+                  <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span>
+                  <span>Пт</span><span>Сб</span><span>Вс</span>
+                </div>
+                <div class="calendar-days" id="calendar-days"></div>
               </div>
-              <div class="field">
-                <label for="cleaning-time">Время</label>
-                <div class="input-wrap">
-                  <i data-lucide="clock-3"></i>
-                  <input id="cleaning-time" type="time" value="10:00" step="1800">
+
+              <div class="time-card" id="time-card">
+                <div class="time-head">
+                  <div>
+                    <span class="time-kicker">Время уборки</span>
+                    <strong id="selected-date-label">Сначала выберите дату</strong>
+                  </div>
+                  <span class="time-note"><i data-lucide="clock-3"></i> Слоты по Минску</span>
                 </div>
+                <div class="time-slots" id="time-slots"></div>
               </div>
             </div>
 
             <div class="field-label">Основной пакет <span class="optional">необязательно</span></div>
             <div class="package-grid" id="package-options"></div>
-
-            <button class="no-package-card" type="button" id="no-package-option" data-package-id="">
-              <span class="no-package-icon"><i data-lucide="package-x"></i></span>
-              <span class="no-package-copy">
-                <strong>Без основного пакета (только доп. услуги)</strong>
-                <small>Подходит, если нужно только помыть окна, диван или убрать балкон.</small>
-              </span>
-              <span class="no-package-check"><i data-lucide="check"></i> Выбрано</span>
-            </button>
 
             <div class="extras-block">
               <div class="extras-head">
@@ -523,9 +534,61 @@
     </div>
   </div>
 
+  <!-- ===================== МОДАЛЬНОЕ ОКНО КАРТЫ ===================== -->
+  <div class="modal" id="map-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="map-modal"></div>
+    <div class="modal-dialog map-dialog" role="dialog" aria-modal="true" aria-labelledby="map-modal-title">
+      <div class="map-dialog-head">
+        <div>
+          <span class="panel-kicker">Адрес уборки</span>
+          <h2 id="map-modal-title">Выберите адрес на карте</h2>
+          <p>Найдите улицу и дом, кликните по карте или перетащите маркер — адрес определится автоматически.</p>
+        </div>
+        <button class="modal-close" type="button" data-close-modal="map-modal" aria-label="Закрыть">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="map-search">
+        <div class="input-wrap map-search-field">
+          <i data-lucide="search"></i>
+          <input id="map-search-input" type="text" placeholder="Например: ул. Немига, 5" autocomplete="off">
+        </div>
+        <button class="btn btn-primary" type="button" id="map-search-btn">
+          <i data-lucide="search"></i><span>Найти</span>
+        </button>
+      </div>
+
+      <div class="map-canvas-wrap">
+        <div id="address-map" class="address-map" aria-label="Интерактивная карта Минска"></div>
+        <span class="map-canvas-hint">
+          <i data-lucide="mouse-pointer-click"></i> Кликните по карте или перетащите маркер
+        </span>
+      </div>
+
+      <div class="map-selected-card">
+        <span class="map-selected-icon"><i data-lucide="map-pin"></i></span>
+        <div class="map-selected-copy">
+          <span>Выбранный адрес</span>
+          <strong id="map-selected-address">Нажмите на карту или найдите адрес</strong>
+          <small id="map-selected-coords">Минск · OpenStreetMap</small>
+        </div>
+        <button class="btn btn-primary" type="button" id="map-apply-btn" disabled>
+          <i data-lucide="check"></i><span>Выбрать этот адрес</span>
+        </button>
+      </div>
+
+      <p class="map-credit">
+        Поиск и обратное геокодирование — Nominatim / OpenStreetMap. Данные могут быть неточными.
+      </p>
+    </div>
+  </div>
+
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
   <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="app.js"></script>
 </body>
 </html>
